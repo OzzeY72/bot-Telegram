@@ -4,7 +4,7 @@ import json
 import os
 
 import datetime
-from datetime import timedelta
+from datetime import timedelta, timezone 
 
 #from telegram.ext.messagehandler import MessageHandler
 from telegram import Update
@@ -44,10 +44,10 @@ def day_convert(num):
         return ['Sunday','Неділя','Воскресенье']
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(f"**Привет, {update.effective_user.first_name}, я бот помощник Инженерного учебно-научного института**",parse_mode='Markdown')
+    await update.message.reply_text(f"<b>Привет, {update.effective_user.first_name}, я бот помощник Инженерного учебно-научного института</b>",parse_mode='html')
 
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE): 
-    await context.bot.send_message("**Все мои возможности: **",parse_mode='Markdown')
+    await context.bot.send_message("<b>Все мои возможности: </b>",parse_mode='html')
 
 async def add_lector(update: Update, context: CallbackContext):
     await context.bot.send_message(chat_id=update.effective_chat.id,text = 'Creating Lector')
@@ -228,20 +228,19 @@ async def get_by_day(update: Update, context: CallbackContext):
         stmt = select(Subject).where(Subject.day.in_([context.args[0]]))
         for lc in session.scalars(stmt):
             await context.bot.send_message(chat_id=update.effective_chat.id,
-                                 text=f"{lc.__repr__()}",parse_mode='Markdown')
+                                 text=f"{lc.__repr__()}",parse_mode='html')
             print(lc.lector.__reprshort__())
 
 async def week_type(update: Update, context: CallbackContext):
     await context.bot.send_message(chat_id=update.effective_chat.id,
-                                 text=f"{'Чисельник' if WEEK_TYPE == 1 else 'Знаменник'}",parse_mode='Markdown')
+                                 text=f"{'Чисельник' if WEEK_TYPE == 1 else 'Знаменник'}",parse_mode='html')
 
 async def poll_handle(context: CallbackContext):
     WEEK_TYPE = 1 if datetime.date.today().isocalendar().week % 2 == 0 else 2 
     DAY_NUMBER = datetime.date.today().weekday() + 1
 
-    hour = datetime.datetime.now().hour
-    #minut = hour * 60 + datetime.datetime.now().minute
-    minut = 9*60+25
+    hour = datetime.datetime.now(timezone.utc).hour+2
+    minut = hour * 60 + datetime.datetime.now().minute
     print(minut)
 
     if minut < 9*60+35:
