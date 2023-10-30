@@ -3,13 +3,16 @@ import webbrowser
 import json
 import os
 
+import datetime
+from datetime import timedelta
+
 #from telegram.ext.messagehandler import MessageHandler
 from telegram import Update
 from telegram.ext import *
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ForceReply
 
 from sqlalchemy import create_engine
-from models import Base, Lector, Subject
+from models import Base, Lector, Subject, BindAlarm
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
@@ -17,6 +20,28 @@ engine = create_engine("sqlite+pysqlite:///C:\\Users\\nabac\\OneDrive\\Desktop\\
 
 EXPECT_LECTOR_NAME, EXPECT_LECTOR_SURNAME, EXPECT_LECTOR_SECONDNAME,EXPECT_LECTOR_ZOOMCODE,EXPECT_LECTOR_ZOOMPASS,EXPECT_LECTOR_TEAMS = range(6)
 EXPECT_SUBJECT_NAME, EXPECT_SUBJECT_DAY, EXPECT_SUBJECT_LESSON, EXPECT_SUBJECT_WEEKTYPE, EXPECT_SUBJECT_GROUP, EXPECT_SUBjECT_LECTOR_NAME = range(6)
+
+WEEK_TYPE = 1 if datetime.date.today().isocalendar().week % 2 == 0 else 2 
+DAY_NUMBER = datetime.date.today().weekday() + 1
+CURRENT_LESSON = 0
+
+print (WEEK_TYPE)
+
+def day_convert(num):
+    if num == 1:
+        return ['Monday','Понеділок','Понедельник']
+    elif num == 2:
+        return ['Tuesday','Вівторок','Вторник']
+    elif num == 3:
+        return ['Wednesday','Середа','Среда']
+    elif num == 4:
+        return ['Thursday','Четверг','Четвер']
+    elif num == 5:
+        return ['Friday',"П'ятниця","Пятница"]
+    elif num == 6:
+        return ['Saturday','Суббота','Субота']
+    else:
+        return ['Sunday','Неділя','Воскресенье']
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"**Привет, {update.effective_user.first_name}, я бот помощник Инженерного учебно-научного института**",parse_mode='Markdown')
@@ -83,7 +108,7 @@ async def lector_teams_input_by_user(update: Update, context: CallbackContext):
         secondname = secondname,
         zoomcode = zoomcode,
         zoompass = zoompass, 
-        isteams = teams == 'y' if True else False
+        isteams = True if teams == 'y' else False
     )
     print(tmp.__repr__())
     with Session(engine) as session:
@@ -181,7 +206,7 @@ async def subject_lector_name_input_by_user(update: Update, context: CallbackCon
         name = name,
         day = day,
         lesson  = lesson,
-        weektype = weektype == 'y' if True else False,
+        weektype = True  if weektype == 'y' else False,
         group = group, 
         lector_id = lector.id,
         lector = lector
@@ -203,32 +228,88 @@ async def get_by_day(update: Update, context: CallbackContext):
         stmt = select(Subject).where(Subject.day.in_([context.args[0]]))
         for lc in session.scalars(stmt):
             await context.bot.send_message(chat_id=update.effective_chat.id,
-                                 text=f"{lc.__repr__()} {lc.lector.__repr__()}")
+                                 text=f"{lc.__repr__()}",parse_mode='Markdown')
+            print(lc.lector.__reprshort__())
 
-async def get_name(update: Update, context: CallbackContext):
-    name = context.user_data.get(
-        'lector_name', 'Not found.')
-    surname = context.user_data.get('lector_surname', 'F')
-    secondname = context.user_data.get('lector_secondname', 'F')
-    zoomcode = context.user_data.get('lector_zoomcode', 'F')
-    zoompass = context.user_data.get('lector_zoompass', 'F')
-    teams = context.user_data.get('lector_teams', 'F')
-    await update.message.reply_text(f"{name} {surname} {secondname} {zoomcode} {zoompass} {teams}")
+async def week_type(update: Update, context: CallbackContext):
+    await context.bot.send_message(chat_id=update.effective_chat.id,
+                                 text=f"{'Чисельник' if WEEK_TYPE == 1 else 'Знаменник'}",parse_mode='Markdown')
+
+async def poll_handle(context: CallbackContext):
+    WEEK_TYPE = 1 if datetime.date.today().isocalendar().week % 2 == 0 else 2 
+    DAY_NUMBER = datetime.date.today().weekday() + 1
+
+    hour = datetime.datetime.now().hour
+    #minut = hour * 60 + datetime.datetime.now().minute
+    minut = 9*60+25
+    print(minut)
+
+    if minut < 9*60+35:
+        CURRENT_LESSON = 1
+    elif minut >= 9*60+35 and minut < 11*60+25:
+        CURRENT_LESSON = 2
+    elif minut >= 11*60+25 and minut < 12*60+55:
+        CURRENT_LESSON = 3
+    elif minut >= 12*60+55 and minut < 14*60+30:
+        CURRENT_LESSON = 4
+    elif minut >= 14*60+30 and minut < 16*60:
+        CURRENT_LESSON = 5
+    else:
+        CURRENT_LESSON = 6
+
+    print('Чисельник' if WEEK_TYPE == 1 else 'Знаменник')
+    print(DAY_NUMBER)
+    print(CURRENT_LESSON)
+
+    if minut == 7*60+50 or minut == 9*60+25 or minut == 11*60+15 or minut == 12*60+45 or minut == 14*60+20 or minut == 15*60+50:
+        try:
+            with Session(engine) as session:
+                for ba in session.query(BindAlarm).all():
+                    if ba.alarm:
+                        await next(int(ba.telid),context)
+        except:
+            print("Error quering db in poll_handle")
+        
+
+async def next(telid, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        with Session(engine) as session:
+            stmt = select(Subject).where(Subject.day.in_(day_convert(DAY_NUMBER)) & Subject.lesson > CURRENT_LESSON)
+            for sub in session.scalars(stmt):
+                await context.bot.send_message(chat_id=telid,
+                                 text=f"{sub.__repr__()}",parse_mode='html')
+    except:
+        print("Error while requesting database")
+
+async def next_command(update: Update,context: ContextTypes.DEFAULT_TYPE):
+    next(update.effective_chat.id,context)
+
+async def allow_alarm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        with Session(engine) as session:
+            exists = session.query(BindAlarm.alarm).filter_by(telid=update.effective_chat.id).first()
+            if exists is not None:
+                session.query(BindAlarm).where(BindAlarm.telid.in_([update.effective_chat.id])).update({BindAlarm.alarm: not exists[0]})
+                exists = exists[0]
+            else:
+                session.add(BindAlarm(telid = update.effective_chat.id,alarm = True))
+                exists = False
+            session.commit()
+            await context.bot.send_message(chat_id=update.effective_chat.id,
+                                 text=f"Сповіщення {'увімкненно' if not exists else 'вимкнено'}",parse_mode='Markdown')
+    except:
+        print("Error while requesting database")
 
 if __name__ == "__main__":
     config = open("C:/Users/nabac/OneDrive/Desktop/bot-Telegram/config.json","r")
     _config = json.loads(config.read())
 
-    updater = ApplicationBuilder().token(_config["token"]).build()
+    updater = ApplicationBuilder().token(_config["token"]).job_queue(JobQueue()).build()
 
     logging.basicConfig(
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         level=logging.INFO
     )
-
-    
-    app = ApplicationBuilder().token(_config["token"]).build()
-
     _handlers = {}
 
     _handlers['start_handler'] = CommandHandler(['start','hello'], start)
@@ -257,11 +338,13 @@ if __name__ == "__main__":
         },
         fallbacks=[CommandHandler('cancel', cancel)]
     )
-    _handlers['get_by_day'] = CommandHandler('get_by_day',get_by_day)
-    _handlers['get_fullname'] = CommandHandler('get_fullname',get_name)
+    _handlers['get_by_day'] = CommandHandler('day',get_by_day)
+    _handlers['next'] = CommandHandler('next',next)
+    _handlers['allow_alarm'] = CommandHandler('alarm',allow_alarm)
 
     for name, _handler in _handlers.items():
         print(f'Adding handler {name}')
         updater.add_handler(_handler)
+    updater.job_queue.run_repeating(poll_handle, timedelta(minutes=1),first=5)
 
     updater.run_polling()
