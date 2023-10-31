@@ -12,11 +12,11 @@ from telegram.ext import *
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ForceReply
 
 from sqlalchemy import create_engine
-from models import Base, Lector, Subject, BindAlarm
+from models import Base, Lector, Subject, BindAlarm, Moderator
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
-engine = create_engine("sqlite+pysqlite:///C:\\Users\\nabac\\OneDrive\\Desktop\\bot-Telegram\\database.db", echo=True)
+engine = create_engine("sqlite+pysqlite:///database.db", echo=True)
 
 EXPECT_LECTOR_NAME, EXPECT_LECTOR_SURNAME, EXPECT_LECTOR_SECONDNAME,EXPECT_LECTOR_ZOOMCODE,EXPECT_LECTOR_ZOOMPASS,EXPECT_LECTOR_TEAMS = range(6)
 EXPECT_SUBJECT_NAME, EXPECT_SUBJECT_DAY, EXPECT_SUBJECT_LESSON, EXPECT_SUBJECT_WEEKTYPE, EXPECT_SUBJECT_GROUP, EXPECT_SUBjECT_LECTOR_NAME = range(6)
@@ -44,16 +44,25 @@ def day_convert(num):
         return ['Sunday','Неділя','Воскресенье']
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(f"<b>Привет, {update.effective_user.first_name}, я бот помощник Инженерного учебно-научного института</b>",parse_mode='html')
+    await update.message.reply_text(f"<b>Привіт, {update.effective_user.first_name}, я бот ІННІ</b>",parse_mode='html')
 
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE): 
-    await context.bot.send_message("<b>Все мои возможности: </b>",parse_mode='html')
+    await context.bot.send_message(chat_id=update.effective_chat.id,text="<b>Всі мої можливості: </b>",parse_mode='html')
 
 async def add_lector(update: Update, context: CallbackContext):
-    await context.bot.send_message(chat_id=update.effective_chat.id,text = 'Creating Lector')
-    await context.bot.send_message(chat_id=update.effective_chat.id,
+    flag = False
+    with Session(engine) as session:
+        for moderator in session.query(Moderator).all():
+            if int(moderator.telid) == update.effective_chat.id:
+                flag = True
+    if flag:
+        await context.bot.send_message(chat_id=update.effective_chat.id,text = 'Creating Lector')
+        await context.bot.send_message(chat_id=update.effective_chat.id,
                                  text='Send lector name', reply_markup=ForceReply())
-    return EXPECT_LECTOR_NAME
+        return EXPECT_LECTOR_NAME
+    else:
+        await context.bot.send_message(chat_id=update.effective_chat.id,text = 'You dont have permission')
+        return ConversationHandler.END
     
 async def lector_name_input_by_user(update: Update, context: CallbackContext):
     name = update.message.text
@@ -117,10 +126,19 @@ async def lector_teams_input_by_user(update: Update, context: CallbackContext):
     return ConversationHandler.END
 
 async def add_subject(update: Update, context: CallbackContext):
-    await context.bot.send_message(chat_id=update.effective_chat.id,text = 'Creating Subject')
-    await context.bot.send_message(chat_id=update.effective_chat.id,
+    flag = False
+    with Session(engine) as session:
+        for moderator in session.query(Moderator).all():
+            if int(moderator.telid) == update.effective_chat.id:
+                flag = True
+    if flag:
+        await context.bot.send_message(chat_id=update.effective_chat.id,text = 'Creating Subject')
+        await context.bot.send_message(chat_id=update.effective_chat.id,
                                  text='Send subject name', reply_markup=ForceReply())
-    return EXPECT_SUBJECT_NAME
+        return EXPECT_SUBJECT_NAME
+    else:
+        await context.bot.send_message(chat_id=update.effective_chat.id,text = 'You dont have permission')
+        return ConversationHandler.END
 
 async def subject_name_input_by_user(update: Update, context: CallbackContext):
     value = update.message.text
@@ -178,7 +196,7 @@ async def subject_group_input_by_user(update: Update, context: CallbackContext):
     
     context.user_data["subject_lesson"] = intval
     await context.bot.send_message(chat_id=update.effective_chat.id,
-                                 text='Send subject lector Name', reply_markup=ForceReply())
+                                 text='Send subject lector Surname', reply_markup=ForceReply())
     return EXPECT_SUBjECT_LECTOR_NAME
 
 async def subject_lector_name_input_by_user(update: Update, context: CallbackContext):
@@ -186,9 +204,7 @@ async def subject_lector_name_input_by_user(update: Update, context: CallbackCon
     lector = None
     #try:
     with Session(engine) as session:
-        stmt = select(Lector).where(Lector.name.in_([value]))
-        for lc in session.scalars(stmt):
-            lector = lc
+        lector = session.query(Lector).where(Lector.surname.in_([value])).first()
     #except:
         #await context.bot.send_message(chat_id=update.effective_chat.id,
                                 # text='Error')
@@ -225,11 +241,10 @@ async def cancel(update: Update, context: CallbackContext):
 
 async def get_by_day(update: Update, context: CallbackContext):
     with Session(engine) as session:
-        stmt = select(Subject).where(Subject.day.in_([context.args[0]]))
+        stmt = select(Subject,Lector).join(Subject.lector).where(Subject.day.in_([context.args[0]]))
         for lc in session.scalars(stmt):
             await context.bot.send_message(chat_id=update.effective_chat.id,
                                  text=f"{lc.__repr__()}",parse_mode='html')
-            print(lc.lector.__reprshort__())
 
 async def week_type(update: Update, context: CallbackContext):
     await context.bot.send_message(chat_id=update.effective_chat.id,
@@ -241,7 +256,10 @@ async def poll_handle(context: CallbackContext):
 
     hour = datetime.datetime.now(timezone.utc).hour+2
     minut = hour * 60 + datetime.datetime.now().minute
+
     print(minut)
+    print('Чисельник' if WEEK_TYPE == 1 else 'Знаменник')
+    print(DAY_NUMBER)   
 
     if minut < 9*60+35:
         CURRENT_LESSON = 1
@@ -255,25 +273,22 @@ async def poll_handle(context: CallbackContext):
         CURRENT_LESSON = 5
     else:
         CURRENT_LESSON = 6
-
-    print('Чисельник' if WEEK_TYPE == 1 else 'Знаменник')
-    print(DAY_NUMBER)
+    
     print(CURRENT_LESSON)
-
     if minut == 7*60+50 or minut == 9*60+25 or minut == 11*60+15 or minut == 12*60+45 or minut == 14*60+20 or minut == 15*60+50:
         try:
             with Session(engine) as session:
                 for ba in session.query(BindAlarm).all():
                     if ba.alarm:
-                        await next(int(ba.telid),context)
+                        await next(int(ba.telid),context, True)
         except:
             print("Error quering db in poll_handle")
         
 
-async def next(telid, context: ContextTypes.DEFAULT_TYPE):
+async def next(telid, context: ContextTypes.DEFAULT_TYPE, strict_next: bool):
     try:
         with Session(engine) as session:
-            stmt = select(Subject).where(Subject.day.in_(day_convert(DAY_NUMBER)) & Subject.lesson > CURRENT_LESSON)
+            stmt = select(Subject,Lector).join(Subject.lector).where(Subject.day.in_(day_convert(DAY_NUMBER)) & Subject.lesson > CURRENT_LESSON) if not strict_next else select(Subject).where(Subject.day.in_(day_convert(DAY_NUMBER)) & Subject.lesson == CURRENT_LESSON+1)
             for sub in session.scalars(stmt):
                 await context.bot.send_message(chat_id=telid,
                                  text=f"{sub.__repr__()}",parse_mode='html')
@@ -281,7 +296,7 @@ async def next(telid, context: ContextTypes.DEFAULT_TYPE):
         print("Error while requesting database")
 
 async def next_command(update: Update,context: ContextTypes.DEFAULT_TYPE):
-    next(update.effective_chat.id,context)
+    next(update.effective_chat.id,context,False)
 
 async def allow_alarm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -300,7 +315,7 @@ async def allow_alarm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print("Error while requesting database")
 
 if __name__ == "__main__":
-    config = open("C:/Users/nabac/OneDrive/Desktop/bot-Telegram/config.json","r")
+    config = open("config.json","r")
     _config = json.loads(config.read())
 
     updater = ApplicationBuilder().token(_config["token"]).job_queue(JobQueue()).build()

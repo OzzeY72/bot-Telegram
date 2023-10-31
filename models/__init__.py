@@ -69,3 +69,9 @@ class BindAlarm(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     telid: Mapped[str]
     alarm: Mapped[bool]
+
+class Moderator(Base):
+    __tablename__ = "moderator"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    telid: Mapped[str]
