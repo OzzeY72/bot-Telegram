@@ -14,7 +14,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ForceReply
 from sqlalchemy import create_engine
 from models import Base, Lector, Subject, BindAlarm, Moderator
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import select, and_, or_
 
 engine = create_engine("sqlite+pysqlite:///database.db", echo=True)
 
@@ -50,12 +50,12 @@ async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id,text="<b>Всі мої можливості: </b>",parse_mode='html')
 
 async def add_lector(update: Update, context: CallbackContext):
-    flag = False
+    tmpflag = False
     with Session(engine) as session:
         for moderator in session.query(Moderator).all():
             if int(moderator.telid) == update.effective_chat.id:
-                flag = True
-    if flag:
+                tmpflag = True
+    if tmpflag:
         await context.bot.send_message(chat_id=update.effective_chat.id,text = 'Creating Lector')
         await context.bot.send_message(chat_id=update.effective_chat.id,
                                  text='Send lector name', reply_markup=ForceReply())
@@ -194,7 +194,7 @@ async def subject_group_input_by_user(update: Update, context: CallbackContext):
                                  text='Only Number, Error')
         return ConversationHandler.END
     
-    context.user_data["subject_lesson"] = intval
+    context.user_data["subject_group"] = intval
     await context.bot.send_message(chat_id=update.effective_chat.id,
                                  text='Send subject lector Surname', reply_markup=ForceReply())
     return EXPECT_SUBjECT_LECTOR_NAME
@@ -210,28 +210,31 @@ async def subject_lector_name_input_by_user(update: Update, context: CallbackCon
                                 # text='Error')
         #return ConversationHandler.END
     
-    context.user_data["subject_lector_name"] = lector.id
+    #context.user_data["subject_lector_name"] = lector.id
 
     name = context.user_data.get('subject_name', 'F')
     day = context.user_data.get('subject_day', 'Wednesday')
     lesson = context.user_data.get('subject_lesson', 1)
-    weektype = context.user_data.get('subject_weektype', 'y')
+    weektype = context.user_data.get('subject_weektype', 3)
     group = context.user_data.get('subject_group', 3)
-
-    tmp = Subject(
-        name = name,
-        day = day,
-        lesson  = lesson,
-        weektype = True  if weektype == 'y' else False,
-        group = group, 
-        lector_id = lector.id,
-        lector = lector
-    )
-    with Session(engine) as session:
-        session.add_all([tmp])
-        session.commit()
-    print(tmp.__repr__())
-
+    if lector is not None:
+        tmp = Subject(
+            name = name,
+            day = day,
+            lesson  = lesson,
+            weektype = weektype,
+            group = group, 
+            lector_id = lector.id,
+            lector = lector
+        )
+        with Session(engine) as session:
+            session.add_all([tmp])
+            session.commit()
+        print(tmp.__repr__())
+    else:
+        await context.bot.send_message(chat_id=update.effective_chat.id,
+                                 text='Invalid lector surname')
+        
     return ConversationHandler.END
 
 async def cancel(update: Update, context: CallbackContext):
@@ -241,7 +244,8 @@ async def cancel(update: Update, context: CallbackContext):
 
 async def get_by_day(update: Update, context: CallbackContext):
     with Session(engine) as session:
-        stmt = select(Subject,Lector).join(Subject.lector).where(Subject.day.in_([context.args[0]]))
+        cond = and_(Subject.day.in_([context.args[0]]), or_(Subject.weektype == WEEK_TYPE, Subject.weektype == 3))
+        stmt = select(Subject,Lector).join(Subject.lector).where(cond)
         for lc in session.scalars(stmt):
             await context.bot.send_message(chat_id=update.effective_chat.id,
                                  text=f"{lc.__repr__()}",parse_mode='html')
@@ -288,8 +292,13 @@ async def poll_handle(context: CallbackContext):
 async def next(telid, context: ContextTypes.DEFAULT_TYPE, strict_next: bool):
     try:
         with Session(engine) as session:
-            stmt = select(Subject,Lector).join(Subject.lector).where(Subject.day.in_(day_convert(DAY_NUMBER)) & Subject.lesson > CURRENT_LESSON) if not strict_next else select(Subject).where(Subject.day.in_(day_convert(DAY_NUMBER)) & Subject.lesson == CURRENT_LESSON+1)
-            for sub in session.scalars(stmt):
+            if not strict_next:
+                cond = and_(Subject.day.in_(day_convert(DAY_NUMBER)),Subject.lesson > CURRENT_LESSON)
+            else:
+                cond = and_(Subject.day.in_(day_convert(DAY_NUMBER)),Subject.lesson == CURRENT_LESSON+1)
+            cond2 = and_(cond,or_(Subject.weektype == WEEK_TYPE, Subject.weektype == 3))
+            #stmt = select(Subject,Lector).join(Subject.lector).where(cond2)
+            for sub in session.query(Subject,Lector).join(Subject.lector).where(cond2):#session.scalars(stmt):
                 await context.bot.send_message(chat_id=telid,
                                  text=f"{sub.__repr__()}",parse_mode='html')
     except:
