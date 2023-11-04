@@ -50,10 +50,10 @@ def intday_convert(str):
         return 2
     elif str in ['Wednesday','Середа','Среда']:
         return 3
-    elif str in ['Thursday','Четверг','Четвер']:
-        return 4
-    elif str in ['Friday',"П'ятниця","Пятница"]:
-        return 5
+    elif str in 4:
+        return ['Thursday','Четверг','Четвер']
+    elif str in 5:
+        return ['Friday',"П'ятниця","Пятница"]
     elif str in ['Saturday','Суббота','Субота']:
         return 6
     else:
@@ -260,14 +260,13 @@ async def cancel(update: Update, context: CallbackContext):
 
 async def get_by_day(update: Update, context: CallbackContext):
     check_week = WEEK_TYPE
-    сheck_day = context.args[0] if len(context.args) > 0 else day_convert(DAY_NUMBER)[1]
-    if intday_convert(сheck_day) < DAY_NUMBER:
+    if intday_convert(context.args[0]) < DAY_NUMBER:
         if check_week == 1:
             check_week = 2
         else:
             check_week = 1
     with Session(engine) as session:
-        cond = and_(Subject.day.in_([сheck_day]), or_(Subject.weektype == check_week, Subject.weektype == 3))
+        cond = and_(Subject.day.in_([context.args[0]]), or_(Subject.weektype == check_week, Subject.weektype == 3))
         stmt = select(Subject,Lector).join(Subject.lector).where(cond)
         for lc in session.scalars(stmt):
             await context.bot.send_message(chat_id=update.effective_chat.id,
@@ -348,7 +347,7 @@ async def next(telid, context: ContextTypes.DEFAULT_TYPE, strict_next: bool,less
         print("Error while requesting database")
 
 async def next_command(update: Update,context: ContextTypes.DEFAULT_TYPE):
-    await next(update.effective_chat.id,context,True,CURRENT_LESSON,True)
+    await next(update.effective_chat.id,context,True)
 async def now_command(update: Update,context: ContextTypes.DEFAULT_TYPE):
     await next(update.effective_chat.id,context,True,CURRENT_LESSON-1,True)
 
