@@ -307,7 +307,7 @@ async def poll_handle(context: CallbackContext):
             with Session(engine) as session:
                 for ba in session.query(BindAlarm).all():
                     if ba.alarm:
-                        await next(int(ba.telid),context, True)
+                        await next(int(ba.telid),context, True,CURRENT_LESSON,True)
         except:
             print("Error quering db in poll_handle")
         
@@ -348,7 +348,7 @@ async def next(telid, context: ContextTypes.DEFAULT_TYPE, strict_next: bool,less
         print("Error while requesting database")
 
 async def next_command(update: Update,context: ContextTypes.DEFAULT_TYPE):
-    await next(update.effective_chat.id,context,True,CURRENT_LESSON,True)
+    await next(update.effective_chat.id,context,True)
 async def now_command(update: Update,context: ContextTypes.DEFAULT_TYPE):
     await next(update.effective_chat.id,context,True,CURRENT_LESSON-1,True)
 
