@@ -2,6 +2,7 @@ import logging
 import webbrowser
 import json
 import os
+import shutil
 
 import datetime
 from datetime import timedelta, timezone 
@@ -16,7 +17,9 @@ from models import Base, Lector, Subject, BindAlarm, Moderator
 from sqlalchemy.orm import Session
 from sqlalchemy import select, and_, or_
 
-engine = create_engine("sqlite+pysqlite:///database.db", echo=True)
+SRC_PATH = "/app/db/"
+
+engine = create_engine(f"sqlite+pysqlite:///{SRC_PATH}database.db", echo=True)
 
 EXPECT_LECTOR_NAME, EXPECT_LECTOR_SURNAME, EXPECT_LECTOR_SECONDNAME,EXPECT_LECTOR_ZOOMCODE,EXPECT_LECTOR_ZOOMPASS,EXPECT_LECTOR_TEAMS = range(6)
 EXPECT_SUBJECT_NAME, EXPECT_SUBJECT_DAY, EXPECT_SUBJECT_LESSON, EXPECT_SUBJECT_WEEKTYPE, EXPECT_SUBJECT_GROUP, EXPECT_SUBjECT_LECTOR_NAME = range(6)
@@ -307,7 +310,7 @@ async def poll_handle(context: CallbackContext):
             with Session(engine) as session:
                 for ba in session.query(BindAlarm).all():
                     if ba.alarm:
-                        await next(int(ba.telid),context, True,CURRENT_LESSON,True)
+                        await next(int(ba.telid),context, True,True)
         except:
             print("Error quering db in poll_handle")
         
@@ -324,14 +327,14 @@ async def next(telid, context: ContextTypes.DEFAULT_TYPE, strict_next: bool,less
                 if not strict_next:
                     cond = and_(Subject.day.in_(day_convert(check_day)),Subject.lesson > check_lesson)
                 else:
-                    cond = and_(Subject.day.in_(day_convert(check_day)),Subject.lesson == check_lesson+1)
+                    cond = and_(Subject.day.in_(day_convert(DAY_NUMBER)),Subject.lesson == check_lesson+1)
                 cond2 = and_(cond,or_(Subject.weektype == check_week, Subject.weektype == 3))
             #stmt = select(Subject,Lector).join(Subject.lector).where(cond2)
                 for sub in session.query(Subject,Lector).join(Subject.lector).where(cond2):#session.scalars(stmt):
                     returned = True
                     await context.bot.send_message(chat_id=telid,
                                  text=f"{sub[0].__repr__()}",parse_mode='html')
-                    if strict_next: break
+                if strict_next: break
                 check_lesson = 0
                 if check_day <= 6:
                     check_day = check_day+1
@@ -348,7 +351,7 @@ async def next(telid, context: ContextTypes.DEFAULT_TYPE, strict_next: bool,less
         print("Error while requesting database")
 
 async def next_command(update: Update,context: ContextTypes.DEFAULT_TYPE):
-    await next(update.effective_chat.id,context,True)
+    await next(update.effective_chat.id,context,False,once=True)
 async def now_command(update: Update,context: ContextTypes.DEFAULT_TYPE):
     await next(update.effective_chat.id,context,True,CURRENT_LESSON-1,True)
 
@@ -369,7 +372,7 @@ async def allow_alarm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print("Error while requesting database")
 
 if __name__ == "__main__":
-    config = open("config.json","r")
+    config = open(f"{SRC_PATH}config.json","r")
     _config = json.loads(config.read())
 
     updater = ApplicationBuilder().token(_config["token"]).job_queue(JobQueue()).build()
