@@ -334,6 +334,7 @@ async def next(telid, context: ContextTypes.DEFAULT_TYPE, strict_next: bool,less
                     returned = True
                     await context.bot.send_message(chat_id=telid,
                                  text=f"{sub[0].__repr__()}",parse_mode='html')
+                    if once: return
                 if strict_next: break
                 check_lesson = 0
                 if check_day <= 6:
@@ -346,7 +347,6 @@ async def next(telid, context: ContextTypes.DEFAULT_TYPE, strict_next: bool,less
                         check_week = 1
                 if count > 7: break
                 count+=1
-                if once: return
     except:
         print("Error while requesting database")
 
