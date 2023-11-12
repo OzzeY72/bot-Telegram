@@ -329,13 +329,13 @@ async def next(telid, context: ContextTypes.DEFAULT_TYPE, strict_next: bool,less
                 else:
                     cond = and_(Subject.day.in_(day_convert(DAY_NUMBER)),Subject.lesson == check_lesson+1)
                 cond2 = and_(cond,or_(Subject.weektype == check_week, Subject.weektype == 3))
-            #stmt = select(Subject,Lector).join(Subject.lector).where(cond2)
                 for sub in session.query(Subject,Lector).join(Subject.lector).where(cond2):#session.scalars(stmt):
                     returned = True
                     await context.bot.send_message(chat_id=telid,
                                  text=f"{sub[0].__repr__()}",parse_mode='html')
-                    if once: return
+                    if once: break
                 if strict_next: break
+                if once: return
                 check_lesson = 0
                 if check_day <= 6:
                     check_day = check_day+1
