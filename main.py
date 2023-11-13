@@ -262,6 +262,9 @@ async def cancel(update: Update, context: CallbackContext):
     return ConversationHandler.END
 
 async def get_by_day(update: Update, context: CallbackContext):
+    global WEEK_TYPE
+    global DAY_NUMBER
+    global CURRENT_LESSON
     check_week = WEEK_TYPE
     сheck_day = context.args[0] if len(context.args) > 0 else day_convert(DAY_NUMBER)[1]
     if intday_convert(сheck_day) < DAY_NUMBER:
@@ -281,6 +284,9 @@ async def week_type(update: Update, context: CallbackContext):
                                  text=f"{'Чисельник' if WEEK_TYPE == 1 else 'Знаменник'}",parse_mode='html')
 
 async def poll_handle(context: CallbackContext):
+    global WEEK_TYPE
+    global DAY_NUMBER
+    global CURRENT_LESSON
     WEEK_TYPE = 1 if datetime.date.today().isocalendar().week % 2 == 0 else 2 
     DAY_NUMBER = datetime.date.today().weekday() + 1
 
@@ -316,13 +322,17 @@ async def poll_handle(context: CallbackContext):
         
 
 async def next(telid, context: ContextTypes.DEFAULT_TYPE, strict_next: bool,lesson_strict=CURRENT_LESSON,once=False):
+    global WEEK_TYPE
+    global DAY_NUMBER
+    global CURRENT_LESSON
+    print("UNITAZ ", WEEK_TYPE, DAY_NUMBER)
     try:
         with Session(engine) as session:
             returned = False
             count = 0
             check_day = DAY_NUMBER
             check_week = WEEK_TYPE
-            check_lesson = CURRENT_LESSON if not strict_next else lesson_strict
+            check_lesson = lesson_strict
             while not returned:
                 if not strict_next:
                     cond = and_(Subject.day.in_(day_convert(check_day)),Subject.lesson > check_lesson)
@@ -333,9 +343,8 @@ async def next(telid, context: ContextTypes.DEFAULT_TYPE, strict_next: bool,less
                     returned = True
                     await context.bot.send_message(chat_id=telid,
                                  text=f"{sub[0].__repr__()}",parse_mode='html')
-                    if once: break
+                    if once: return
                 if strict_next: break
-                if once: return
                 check_lesson = 0
                 if check_day <= 6:
                     check_day = check_day+1
@@ -351,8 +360,10 @@ async def next(telid, context: ContextTypes.DEFAULT_TYPE, strict_next: bool,less
         print("Error while requesting database")
 
 async def next_command(update: Update,context: ContextTypes.DEFAULT_TYPE):
+    global CURRENT_LESSON
     await next(update.effective_chat.id,context,strict_next=False,once=True,lesson_strict=CURRENT_LESSON)
 async def now_command(update: Update,context: ContextTypes.DEFAULT_TYPE):
+    global CURRENT_LESSON
     await next(update.effective_chat.id,context,strict_next=True,lesson_strict=CURRENT_LESSON-1,once=True)
 
 async def allow_alarm(update: Update, context: ContextTypes.DEFAULT_TYPE):
